@@ -10,12 +10,11 @@ library(rtracklayer)
 
 ############# annotate bed file. 
 gff <- import.gff("gencode.v19.chr_patch_hapl_scaff.annotation.gtf") #gtf from PAR-CLIP accessories
-
 txdb <- GenomicFeatures::makeTxDbFromGRanges(gff)
 txdbFeatures <- getTxdbFeaturesFromGRanges(gff)
 transcriptCoords <- GenomicFeatures::transcripts(txdb)
 
-#Importing the output file from alleyoop merge. File contains all UTR and T-to-C fractions per sample
+#Importing the output file from alleyoop merge (SLAM-DUNK outut). File contains all T-to-C fractions per 3'UTR per sample. 
 data<-read_tsv("/Volumes/BackupPlus/alleyoop/merge_all", skip=3)
 glimpse(data)
 bed<-data %>% 
@@ -141,9 +140,10 @@ result_KO_halflife <- na.omit(result_KO_halflife)
 result_TA_halflife<- read_csv("result_TA_halflife")
 result_KO_halflife<- read_csv("result_KO_halflife")
 
-PARdata<-read_csv("all_counts_RIP_par_genelevel")
+PARdata<-read_csv("all_counts_RIP_par_genelevel1")
 glimpse(PARdata)
-colnames(PARdata)[2]<-"SYMBOL"
+colnames(PARdata)[1]<-"SYMBOL" 
+PARdata <- PARdata %>% mutate("SYMBOL" = as.character(SYMBOL))
 
 all_halflife<- full_join(result_TA_halflife, result_KO_halflife, by = "SYMBOL")
 alldata<-full_join(PARdata, all_halflife, by = "SYMBOL")
@@ -156,21 +156,9 @@ IRF3_all_halflife<-na.omit(IRF3_all_halflife)
 
 #genes with a change in halflife by atleast 1.5 foldchange
 functional_targets<- alldata %>% 
+  filter(normalized_Flag_IRF3 > 0) %>% 
   filter(IRF3_3UTR > 0) %>% 
   filter(halflife.x/halflife.y > 1.5)
-
-
-##### Looking at metadata of the functional targets. What is the expression and enrichment level of functional targets and how do they compare to non-functional targets
-func<-func %>% filter(IRF3_mean_counts/naive_mean_counts > 0.6)
-alldata_df<-cbind(alldata, func_df)
-func_df<- alldata$SYMBOL %in% func$SYMBOL
-
-alldata_df %>% filter(IRF3_3UTR > 0) %>% 
-ggplot(aes(x= normalized_Flag_IRF3, y = IRF3_mean_counts/naive_mean_counts, color= as.factor(func_df))) + geom_point() + 
-  theme_minimal() +
-  scale_color_manual(values=c("#999999", "#E69F00", "#56B4E9")) +
-  geom_hline(yintercept= 0) +
-  geom_vline(xintercept= 0)
 
 #write_tsv(test, "test")
 
@@ -190,7 +178,7 @@ alldata %>%
     geom_boxplot(aes(x = Category, y = halflife ), width = .5, alpha = 0 , color= "black") +
     theme_minimal() 
   
-# Simple boxplot and  violin (playing around with aesthitics)
+# Simple boxplot and  violin (playing around with aesthetics)
 alldata %>% filter (source == "halflife.y") %>%
     mutate(Category = case_when(
       IRF3_3UTR > 0  ~ " > 0 3'UTR sites", 
@@ -204,7 +192,7 @@ alldata %>% filter (source == "halflife.y") %>%
     theme_minimal() +
   ylim(2,16)
   
-#Testing the signiifcance Mann-Whitney wilcoxon of the differences in halflife between bins 
+#Testing the significance Mann-Whitney wilcoxon of the differences in half-life between bins 
 #Change halflife.x or y depending on parental or KO 
 halflife_nosites_TA <- alldata %>% 
     filter(source == "halflife.y") %>% 
@@ -238,7 +226,7 @@ alldata %>% filter(source == "halflife.x") %>%
     geom_line(aes(y = .5), linetype = "dotted")
 
 #############################################
-#Binning cimulative number of 3'UTR binding sites for CDF plots
+#Binning cumulative number of 3'UTR binding sites for CDF plots
 library(mltools)
 alldata[,"quantiles_Naive"] <- bin_data(alldata$naive_3UTR, bins=c(0, 1, 2, 5, 10, 56), binType = "explicit")
 
@@ -349,10 +337,10 @@ df <- data.frame(x = c(AllTranscripts, HighBinders_3UTR_Express,
                        NoBinders_3UTR_Express),
                  ggg = factor(rep(1:7, c(4058,13,106,338,746, 652,2203))))
 
-
 ggplot(df, aes(x, colour = ggg)) +
   stat_ecdf() +
   xlim(2, 18) +
+  theme_minimal() +
   scale_colour_hue(name="my legend", labels=c('AllTranscripts', 'High > 20', 
                                               'HighMedium (10-20 )', 'Medium (5-10)',
                                               'Medium_Low (2-5)', 'Low (1-2)','No Binders'))
@@ -390,7 +378,7 @@ fitted_results %>%
   geom_line(alpha = .05, color = "maroon") +
   theme_minimal()
 
-fitted_results %>% filter(SYMBOL ==	"IFNB1") %>%
+fitted_results %>% filter(SYMBOL ==	"NFKB1") %>%
   gather(source, fitted, c(.fitted.x, .fitted.y)) %>%
   gather(resid_source, resid, c(.resid.x, .resid.y)) %>%
   ggplot(aes(x= timepoints, y = fitted, color = source)) +
@@ -399,19 +387,13 @@ fitted_results %>% filter(SYMBOL ==	"IFNB1") %>%
   ylim(.2,1)+
   theme_minimal()
 
-test_alldata<- alldata %>% 
-  spread(source, halflife) %>%
-  #spread(source, halflife) %>% 
+#################################################################
+function_targets<- alldata %>% 
   mutate(FC = halflife.x/halflife.y) %>%
   filter(IRF3_3UTR > 0) %>%
+  filter(normalized_Flag_IRF3 > 0) %>%
   filter(FC > 1.5)
 
-non_functional<- alldata %>% 
-  spread(source, halflife) %>%
-  #spread(source, halflife) %>% 
-  mutate(FC = halflife.x/halflife.y) %>%
-  filter(IRF3_3UTR > 0) %>%
-  filter(FC < 1.5)
 
 #write.csv(non_functional,"non_functional")
 test<-fitted_results %>% 
@@ -466,7 +448,7 @@ df <- data.frame(x = c(All_RNAtargets_Express_0H, NonTargets_Express,
                        FiveUTR_Only_Express,Coding_Only_Express, 
                        ThreeUTR_Only_Express,Intron_Only_Express, 
                        ThreeIntron_Express, Multi_Targets_Express) 
-                 ,ggg = factor(rep(1:8, c(4058,1757,10,22,791, 372,769, 247))))
+                 ,ggg = factor(rep(1:8, c(4058,1918,9,18,703, 330,747, 240))))
 
 ggplot(df, aes(x=as.factor(ggg), y=x, fill=ggg)) +
   geom_boxplot(width= .5) +
@@ -482,7 +464,9 @@ ggplot(df, aes(x, colour = ggg)) +
 ggplot(df, aes(x, colour = ggg, width=.5)) +
   coord_flip() +
   geom_boxplot(width=.5)+
-  theme_minimal()
+  theme_minimal() + 
+  scale_colour_hue(name="my legend", labels=c('AllTranscripts','No_binders','5UTR', 
+                                              'coding','3UTR', 'intron', '3UTR_intron','multi'))
 
 #########################
 #Stability based on number of introns and NO 3'UTR contribution 
@@ -552,7 +536,7 @@ ggplot(aes(y= normalized_Flag_IRF3, x = log(IRF3_3UTR/IRF3_Intron))) +
   geom_smooth(method='lm', formula= y~x) +
   theme_minimal()
 
-RIP_par_data<- read.csv("all_counts_RIP_par_genelevel")
+RIP_par_data<- read.csv("all_counts_RIP_par_genelevel1")
 IRF3_3UTR_data<- RIP_par_data %>% filter(IRF3_3UTR > 0)
 
 IRF3_low <- alldata %>% filter(IRF3_3UTR >= 1 & IRF3_3UTR <= 2)
@@ -583,22 +567,22 @@ ggplot(naive_low, aes(y = normalized_Flag_naive, x = as.factor(quantiles_Intron)
 
 #############################
 # What portion out of all the binding sites are in the 3'UTR 
-RIP_par_data %>% mutate(total_sites_naive = rowSums(RIP_par_data[7:10]), 
-                        total_sites_IRF3= rowSums(RIP_par_data[11:14])) %>%
+RIP_par_data %>% mutate(total_sites_naive = rowSums(RIP_par_data[6:9]), 
+                        total_sites_IRF3= rowSums(RIP_par_data[10:13])) %>%
   ggplot(aes(y= IRF3_3UTR/total_sites_IRF3, x= naive_3UTR/total_sites_naive)) +
   geom_point() +
   theme_minimal() +
   geom_abline(x= 0, b= 1, color = "grey")
 
 IRF3_total<-RIP_par_data %>% 
-  mutate(total_number = rowSums(RIP_par_data[11:14])) 
+  mutate(total_number = rowSums(RIP_par_data[10:13])) 
 
 summary(as.data.frame(naive_total$naive_total))
 
 ##### 
 #plotting enrichment based ofd of a cumulative number of "total" binding sites 
 naive_total<- RIP_par_data %>% 
-  mutate(total_number = rowSums(RIP_par_data[7:10]))
+  mutate(total_number = rowSums(RIP_par_data[6:9]))
 
 naive_total[,"naive_total"] <- bin_data(naive_total$total_number, 
                                         bins=c(0, 1, 2, 5, 10,25, 415),
@@ -632,25 +616,14 @@ ggplot(IRF3_total, aes(color= IRF3_total, x = normalized_Flag_IRF3)) +
   theme_minimal() +
   xlim(-4, 4)
 
-glimpse(alldata %>% mutate(category = as.numeric(IRF3_3UTR/sum(IRF3_5UTR:IRF3_3UTR)))) %>%
-ggplot(aes(x = halflife.x, y =category)) + geom_point() +  geom_smooth(method='lm', formula= y~x)
 
-glimpse(IRF3_total)
-zero <- naive_total %>% filter(naive_total == "[0, 1)")
-test<- naive_total %>% filter(naive_total == "[25, 415]")
-
-x<-wilcox.test(zero$normalized_Flag_naive, test$normalized_Flag_naive)
-p.adjust(x$p.value, method = "bonferroni", n = 2) 
-
-
-
-
-
+#Testing increasing number on introns vs. increasing number of 3'UTR in the transcripts that have both types of binding-sites
 #############################################
 ThreeUTRSpecific[,"quantiles"] <- bin_data(ThreeUTRSpecific$IRF3_3UTR, bins=c(0, 1, 2, 5, 10, 20, 56), binType = "explicit")
 ThreeUTRSpecific <- ThreeUTRSpecific %>% mutate(source = "ThreeSpecific")
 
 Intron_and_ThreeUTR[,"quantiles"] <- bin_data(Intron_and_ThreeUTR$IRF3_3UTR, bins=c(0, 1, 2, 5, 10, 20, 56), binType = "explicit")
+
 Intron_and_ThreeUTR <- Intron_and_ThreeUTR %>% mutate(source = "Three and Intron")
 
 All_3UTRs <- rbind(ThreeUTRSpecific, Intron_and_ThreeUTR)
@@ -658,10 +631,9 @@ All_3UTRs <- rbind(ThreeUTRSpecific, Intron_and_ThreeUTR)
 ggplot(All_3UTRs, aes(x= halflife.x, color = as.factor(source)))+
   stat_ecdf() +
   theme_minimal() +  
-  xlim(2,20) +
   facet_wrap(~quantiles) 
   
-
+########################################################
 Intron_and_ThreeUTR[,"quantiles"] <- bin_data(Intron_and_ThreeUTR$IRF3_Intron, bins=c(0, 1, 2, 5, 10, 20, 400), binType = "explicit")
 
 I_Intron_and_ThreeUTR <- Intron_and_ThreeUTR %>% mutate(source = "I_Intron_and_ThreeUTR")
@@ -669,10 +641,10 @@ I_Intron_and_ThreeUTR <- Intron_and_ThreeUTR %>% mutate(source = "I_Intron_and_T
 IntronSpecific[, "quantiles"] <- bin_data(IntronSpecific$IRF3_Intron, bins=c( 0, 1, 2, 5, 10, 20, 400), binType = "explicit")
 IntronSpecific <- IntronSpecific %>% mutate(source = "IntronSpecific")
 
-
 All_Intron <- rbind(I_Intron_and_ThreeUTR, IntronSpecific)
 
 ggplot(All_Intron, aes(x= normalized_Flag_IRF3, color = as.factor(source), na.rm = TRUE))+
   stat_ecdf() +
   theme_minimal() + 
   facet_wrap(~quantiles)
+

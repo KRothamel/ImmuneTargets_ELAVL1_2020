@@ -250,12 +250,24 @@ ggplot(All_Intron, aes(x= normalized_Flag_IRF3, color = as.factor(source), na.rm
   facet_wrap(~quantiles)
 
 
-all_bound %>% 
-  gather(RIPseq, source, c(normalized_Flag_naive,  normalized_Flag_IRF3)) %>%
-                       ggplot(aes(x=source, color=RIPseq)) + geom_density() +
-  theme_minimal() + xlim(-1,5)
-
-all_data %>% mutate()
 
 
-xx %>% group_by()
+RIP<- all_IRF3 %>% filter(normalized_Flag_IRF3 > 0)
+RIP_naive <- all_naive %>% filter(normalized_Flag_naive > 0)
+
+x<- RIP$gene_short_name %notin% RIP_naive$gene_short_name
+RIP_1 <- RIP[x,]
+
+RIP_2 <- RIP_1 %>% filter(IRF3_mean_counts - naive_mean_counts < 1) %>% filter(naive_mean_counts - IRF3_mean_counts < 1)
+
+
+
+plot(all_IRF3$naive_mean_counts, all_IRF3$IRF3_mean_counts, pch= 20)
+plot(RIP$naive_mean_counts, RIP$IRF3_mean_counts, pch=20)
+
+
+functional_targtets<- read_csv("functional_targets")
+functional_targtets<- functional_targtets %>% filter(normalized_Flag_IRF3 > 0)
+
+xy<-RIP_2$gene_short_name %in% functional_targtets$gene
+rip<- RIP_2[xy,]

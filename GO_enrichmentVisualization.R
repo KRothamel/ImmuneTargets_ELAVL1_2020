@@ -14,48 +14,6 @@ library(DT)
 library(Hmisc)
 library(RColorBrewer)
 
-#Importing dataframe from Annotating_Intron script
-full_anno<-read.csv("fully_annotated_sites")
-full_anno_3UTR<- full_anno %>% filter(naive_3UTR > 0 | IRF3_3UTR > 0)
-
-ggplot(full_anno_3UTR, aes(x= (full_anno_3UTR$IRF3_mean_counts-full_anno_3UTR$naive_mean_counts),  y= (full_anno_3UTR$normalized_Flag_IRF3), color = full_anno_3UTR$IRF3_3UTR)) + 
-  geom_point(alpha=1) + scale_colour_gradientn(colors=brewer.pal(n = 11, name = "Spectral")) + 
-  theme_minimal() + #geom_count(aes(size = full_anno$IRF3_3UTR)) +
-  xlim(-5,10)+
-  geom_vline(xintercept = 1, 
-             color = "black", size=1) +
-  geom_vline(xintercept = -1, 
-             color = "black", size=1) +
-  geom_hline(yintercept = 1, 
-             color = "black", size=1) +
-  geom_hline(yintercept = -1, 
-             color = "black", size=1) +
-  labs(y="IRF3 enrichment", 
-       x="foldchange in IRF3 counts/ naive counts", 
-       title="3'UTR expression vs. enrichment")
-
-quad1_ehi_hi<- full_anno_3UTR %>% filter(full_anno_3UTR$IRF3_mean_counts-full_anno_3UTR$naive_mean_counts > 1 & full_anno_3UTR$normalized_Flag_IRF3 > 1)
-quad2_elow_hi<-full_anno_3UTR %>% filter(full_anno_3UTR$IRF3_mean_counts-full_anno_3UTR$naive_mean_counts < - 1 & full_anno_3UTR$normalized_Flag_IRF3 > 1)
-quad3_ehi_low_<-full_anno_3UTR %>% filter(full_anno_3UTR$IRF3_mean_counts-full_anno_3UTR$naive_mean_counts <= 1 & full_anno_3UTR$normalized_Flag_IRF3 > 1)
-quad4_elow_low<- full_anno_3UTR %>% filter(full_anno_3UTR$IRF3_mean_counts-full_anno_3UTR$naive_mean_counts  <= -1 & full_anno_3UTR$normalized_Flag_IRF3 < -1) 
-
-full_anno %>%
-  mutate(Category = case_when(
-    (full_anno$IRF3_mean_counts-full_anno$naive_mean_counts) > 1 &
-      full_anno$normalized_Flag_IRF3 > 0 & full_anno$IRF3_3UTR > 0 ~ "upregulated_enriched" , 
-    (full_anno$IRF3_mean_counts-full_anno$naive_mean_counts) < - 1 & full_anno$normalized_Flag_IRF3 > 0 & full_anno$IRF3_3UTR > 0 ~ "downregulated_enriched",
-    (full_anno$IRF3_mean_counts-full_anno$naive_mean_counts) > 1 & full_anno$normalized_Flag_IRF3 < 0 & full_anno$IRF3_3UTR > 0 ~ "upregulated_unenriched",
-    (full_anno$IRF3_mean_counts-full_anno$naive_mean_counts)  <= -1 & full_anno$normalized_Flag_IRF3 < 0 & full_anno$IRF3_3UTR > 0 ~ "downregulated_uneriched",
-    TRUE ~ "non-3UTR binders", 
-  )) %>% 
-  ggplot(aes(x= (log(length_3UTR)))) + 
-  geom_density(aes(color = Category)) +
-  geom_density(alpha=.2, color = "black") +
-  theme_minimal() +
-  labs(y="density", 
-      x="3UTR length", 
-      title="IRF3_3UTR binding sites quadrants")
-
 #visualizing GO terms
 library(ReactomePA)
 library(org.Hs.eg.db)
@@ -64,7 +22,7 @@ library(clusterProfiler)
 #getting ENTRREZID for GO visualization from clusterprofiler and ReactomePA
 mRNA_specifictoTHP1s_df<-read_csv("mRNA_specifictoTHP1s_df")
 
-gene.df <- bitr(mRNA_specifictoTHP1s_df, fromType = "SYMBOL",
+gene.df <- bitr(mRNA_specifictoTHP1s_df$gene_short_name, fromType = "SYMBOL",
                 toType = c("ENTREZID", "ENSEMBL"),
                 OrgDb = org.Hs.eg.db)
 
@@ -130,9 +88,7 @@ barplot(HEKgo) + theme_minimal() +
 
 barplot(ego_RA)
 
-######################
-
-## Create enrichGO object
+## Create enrichGO and pathway analysis objects
 library(clusterProfiler)
 library(org.Hs.eg.db)
 library(ReactomePA)
@@ -146,11 +102,9 @@ all_IRF3<-read_csv("IRF3_mRNA_transcriptbound")
 `%notin%` = Negate(`%in%`)
 
 #Only want the enriched targets 
-all_naive<-all_naive %>% filter(normalized_Flag_naive > .2)
 naive_x<- all_naive$gene_short_name %notin% all_IRF3$gene_short_name
 naive_spec<-all_naive[naive_x,]
 
-all_IRF3<-all_IRF3 %>% filter(normalized_Flag_IRF3 > 2)
 IRF3_x<- all_IRF3$gene_short_name %notin% all_naive$gene_short_name
 IRF3_spec<-all_IRF3[IRF3_x,]
 
@@ -159,7 +113,7 @@ shared_spec<-all_naive[shared_x,]
 
 # GO visualizations of PAR-CLIP and RIP specific data 
 naive_mRNA<- naive_spec$gene_short_name
-naive_mRNA_df <- bitr(naive_mRNA, fromType = "SYMBOL",
+naive_mRNA_df <- bitr(naive_spec$gene_short_name, fromType = "SYMBOL",
                       toType = c("ENTREZID", "ENSEMBL"),
                       OrgDb = org.Hs.eg.db)
 
@@ -169,18 +123,16 @@ naive_mRNA_BP <- enrichGO(gene     = naive_mRNA_df$ENTREZID,
                           OrgDb         = org.Hs.eg.db,
                           ont           = "BP",
                           pAdjustMethod = "BH",
-                          pvalueCutoff  = 0.01,
+                          pvalueCutoff  = 0.05,
                           qvalueCutoff  = 0.05,
                           readable = TRUE)
 
 barplot(naive_RA) + theme_minimal()
 
-
 IRF3_mRNA <- IRF3_spec$gene_short_name
 IRF3_mRNA_df <- bitr(IRF3_mRNA, fromType = "SYMBOL",
                 toType = c("ENTREZID", "ENSEMBL"),
                 OrgDb = org.Hs.eg.db)
-
 
 IRF3_BP <- enrichGO(gene     = IRF3_mRNA_df$ENTREZID,
                    OrgDb         = org.Hs.eg.db,
@@ -199,6 +151,76 @@ barplot(IRF3_RA) + theme_minimal() +
         panel.grid.major = element_blank(),
         strip.text.y = element_text(size=12)) +
   labs(y= "Number of transcripts", title = "GO analysis IRF3 specific")
+
+
+
+shared_mRNA <- shared_spec$gene_short_name
+shared_mRNA_df <- bitr(shared_mRNA, fromType = "SYMBOL",
+                     toType = c("ENTREZID", "ENSEMBL"),
+                     OrgDb = org.Hs.eg.db)
+shared_BP <- enrichGO(gene     = shared_mRNA_df$ENTREZID,
+                    OrgDb         = org.Hs.eg.db,
+                    ont           = "BP",
+                    pAdjustMethod = "BH",
+                    pvalueCutoff  = 0.01,
+                    qvalueCutoff  = 0.05,
+                    readable = TRUE)
+
+shared_RA<-enrichPathway(shared_mRNA_df$ENTREZID, organism = "human", readable = TRUE, pvalueCutoff  = 0.1)
+
+barplot(shared_RA) + theme_minimal() +
+  coord_flip() + 
+  theme(axis.text.x = element_text(size=12), 
+        axis.text.y = element_text(),
+        panel.grid.major = element_blank(),
+        strip.text.y = element_text(size=12)) +
+  labs(y= "Number of transcripts", title = "GO analysis IRF3 specific")
+
+#############################################################################
+functional_targets<- read_csv("functional_targets")
+func_mRNA <- functional_targets$gene
+
+func_mRNA_df <- bitr(func_mRNA, fromType = "SYMBOL",
+                       toType = c("ENTREZID", "ENSEMBL"),
+                       OrgDb = org.Hs.eg.db)
+
+func_mRNA_BP <- enrichGO(gene     = func_mRNA_df$ENTREZID,
+                      OrgDb         = org.Hs.eg.db,
+                      ont           = "BP",
+                      pAdjustMethod = "BH",
+                      pvalueCutoff  = 0.1,
+                      qvalueCutoff  = 0.5,
+                      readable = TRUE)
+
+shared_RA<-enrichPathway(func_mRNA_df$ENTREZID, organism = "human", readable = TRUE)
+
+barplot(func_mRNA_BP) + theme_minimal() +
+  coord_flip() + 
+  theme(axis.text.x = element_text(size=12), 
+        axis.text.y = element_text(),
+        panel.grid.major = element_blank(),
+        strip.text.y = element_text(size=12)) +
+  labs(y= "Number of transcripts", title = "GO analysis IRF3 specific")
+
+
+func_mRNA_df_BP <- enrichKEGG(gene     = func_mRNA_df$ENTREZID,
+                             #OrgDb         = org.Hs.eg.db,
+                             #ont           = "BP",
+                             pAdjustMethod = "BH",
+                             pvalueCutoff  = 0.1,
+                             qvalueCutoff  = 0.5)
+#readable = TRUE)
+
+
+
+
+
+
+
+
+
+
+
 
 #Reactome PA enrichment 
 IRF3_RA<-enrichPathway(IRF3_mRNA_df$ENTREZID, organism = "human", 
@@ -334,19 +356,13 @@ ggplot(aes(x= normalized_Flag_IRF3, color = Description))+
   
 ###################################### 
 #GO of high conficence 3'UTR targets with decreased half-life in KO  
-BiocManager::install("DOSE")
-library(DOSE)
-halflife<-read_csv("testdata1")
+halflife<-read_csv("functional_targets") %>% as.data.frame()
+halflife<-halflife %>% filter(normalized_Flag_IRF3 > 0)
+halflife_mRNA<- halflife$gene
 
-#halflife<-halflife %>% filter(normalized_Flag_IRF3 > 0)
-
-halflife_df <- bitr(halflife$gene, fromType = "SYMBOL",
+halflife_df <- bitr(halflife_mRNA, fromType = "SYMBOL",
                      toType = c("ENTREZID", "ENSEMBL"),
                      OrgDb = org.Hs.eg.db)
-
-
-ncg<-enrichDGN(halflife_df$ENTREZID, pvalueCutoff = .8, qvalueCutoff = .8)
-head(ncg, n = 20)
 
 halflife_df_BP <- enrichGO(gene     = halflife_df$ENTREZID,
                     OrgDb         = org.Hs.eg.db,
@@ -355,10 +371,10 @@ halflife_df_BP <- enrichGO(gene     = halflife_df$ENTREZID,
                     readable = TRUE)
 
 halflife_df_KEGG <- enrichKEGG(gene     = halflife_df$ENTREZID,
-                           pvalueCutoff  = 0.01,
-                           qvalueCutoff  = 0.05)
+                           pvalueCutoff  = 0.1,
+                           qvalueCutoff  = 0.5)
 
-halflife_df_RA<-enrichPathway(halflife_df$ENTREZID, organism = "human",  readable = TRUE)
+halflife_df_KEGG <-enrichPathway(halflife_df$ENTREZID, organism = "human",  readable = TRUE)
 
 emapplot(halflife_df_BP, showCategory = 10, layout = "kk")
 cnetplot(halflife_df_KEGG, showCategory = 10, colorEdge=TRUE, node_label="category" )

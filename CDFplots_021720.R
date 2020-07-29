@@ -7,7 +7,7 @@ library(data.table)
 library(mltools)
 
 ### Clear all previous data. Load in filtered counts_RIP_par_genelevel data
-data<-read_csv("all_counts_RIP_par_genelevel")
+data<-read_csv("all_counts_RIP_par_genelevel1")
 
 #Breaking up data into Naive and IRF3 
 naive_data<-data %>% 

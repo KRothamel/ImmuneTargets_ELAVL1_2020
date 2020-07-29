@@ -105,7 +105,7 @@ all_counts_RIP_PAR_filter<- full_join(all_counts_RIP, all_filter_par, by= "gene_
 all_counts_RIP_PAR_filter<- all_counts_RIP_PAR_filter %>% mutate_at(c(6:13), funs(replace(., is.na(.), 0)))
 all_counts_RIP_PAR_filter<- all_counts_RIP_PAR_filter %>% mutate(naive_mean_counts = as.numeric(naive_mean_counts), IRF3_mean_counts = as.numeric(IRF3_mean_counts), normalized_Flag_naive = as.numeric(normalized_Flag_naive), normalized_Flag_IRF3= as.numeric(normalized_Flag_IRF3))
 
-#write_csv(all_counts_RIP_par, "all_counts_RIP_par_genelevel1")
+#write_csv(all_counts_RIP_PAR_filter, "all_counts_RIP_par_genelevel1")
 
 #Master table to work with#
 master_data<-read_csv("all_counts_RIP_par_genelevel1")
