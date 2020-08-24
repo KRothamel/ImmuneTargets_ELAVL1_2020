@@ -109,6 +109,10 @@ all_counts_RIP_PAR_filter<- all_counts_RIP_PAR_filter %>% mutate(naive_mean_coun
 
 #Master table to work with#
 master_data<-read_csv("all_counts_RIP_par_genelevel1")
+
+ggplot(master_data, aes(y= (naive_mean_counts-IRF3_mean_counts), x = rank(normalized_Flag_naive) - rank(normalized_Flag_IRF3))) + 
+  geom_point(alpha = .1) +
+  theme_minimal()
   
   ##########################################################################################################
 ### Importing specific Clustering Information for Cluster level analysis
