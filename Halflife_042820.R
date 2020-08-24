@@ -8,13 +8,13 @@ library(biomaRt)
 library(GenomicFeatures)
 library(rtracklayer)
 
-############# annotate bed file. 
+############# 
 gff <- import.gff("gencode.v19.chr_patch_hapl_scaff.annotation.gtf") #gtf from PAR-CLIP accessories
 txdb <- GenomicFeatures::makeTxDbFromGRanges(gff)
 txdbFeatures <- getTxdbFeaturesFromGRanges(gff)
 transcriptCoords <- GenomicFeatures::transcripts(txdb)
 
-#Importing the output file from alleyoop merge (SLAM-DUNK outut). File contains all T-to-C fractions per 3'UTR per sample. 
+#Importing the output file from alleyoop merge (SLAM-DUNK output). File contains all T-to-C fractions per 3'UTR per sample. 
 data<-read_tsv("/Volumes/BackupPlus/alleyoop/merge_all", skip=3)
 glimpse(data)
 bed<-data %>% 
@@ -86,7 +86,7 @@ KO_norm <- KO_raw_data %>%
   mutate(timepoints = as.numeric(str_sub(Condition, start = 1, end = 1))) %>%
   filter(!is.na(norm_T2C) & norm_T2C > 0)
 
-####### Non-linear decay model equation from Herzog and tidied up by Sarah Arcos 
+####### Non-linear decay model equation from Herzog et al., 2017 and refined by Sarah Arcos 
 library(minpack.lm)
 
 calculate_model2 <- function(gene_data){
@@ -112,7 +112,7 @@ result_TA <- TA_norm %>%
   bind_rows()
 
 result_TA_halflife <- result_TA %>%
-  dplyr::select(SYMBOL, halflife) %>%
+  dplyr::select(SYMBOL, halflife, timepoints) %>%
   unique()
 
 result_KO <- KO_norm %>%
@@ -121,7 +121,7 @@ result_KO <- KO_norm %>%
   bind_rows()
 
 result_KO_halflife <- result_KO %>%
-  dplyr::select(SYMBOL, halflife) %>%
+  dplyr::select(SYMBOL, halflife, timepoints) %>%
   unique()
 
 # Herzog et al. 2017 does this in the SLAM-seq paper. Max half-life is 24 hours. 
@@ -158,9 +158,9 @@ IRF3_all_halflife<-na.omit(IRF3_all_halflife)
 functional_targets<- alldata %>% 
   filter(normalized_Flag_IRF3 > 0) %>% 
   filter(IRF3_3UTR > 0) %>% 
-  filter(halflife.x/halflife.y > 1.5)
+  filter(halflife.x-halflife.y > 1.5)
 
-#write_tsv(test, "test")
+#write_tsv(functional_targets, "functional_targets")
 
 # Boxplot of halflife from parental and KO (3 bins, all transcripts, targets and nontargets)
 #halflife.x = parental, halflife.y = KO
@@ -168,23 +168,21 @@ alldata <- alldata %>% gather(source, halflife, c(halflife.x, halflife.y))
 
 alldata %>%
     mutate(Category = case_when(
-    IRF3_3UTR > 0  ~ " > 0 3'UTR sites", 
-    IRF3_3UTR == 0 ~ " 0 3'UTR sites"
+      IRF3_3UTR > 0 | IRF3_5UTR > 0 | IRF3_Exon > 0 | IRF3_Intron > 0   ~ "target", 
   )) %>%
-    ggplot(aes(x = Category, y = halflife)) +
-    geom_jitter(aes(x = "mean", y = halflife), alpha = .5 , width = .25, size = .5, color = "steelblue") +
-    geom_boxplot(aes(x = "mean", y = halflife ), width = .5, size = .5, alpha= 0, color = "black") +
-    geom_jitter(width = .25, alpha = .5, size = .5, color = "steelblue") +
-    geom_boxplot(aes(x = Category, y = halflife ), width = .5, alpha = 0 , color= "black") +
-    theme_minimal() 
+    ggplot(aes(x = Category, y = halflife, color = source)) +
+    #geom_jitter(aes(x = "mean", y = halflife), alpha = .5 , width = .25, size = .5, color = "steelblue") +
+    #geom_boxplot(aes(x = "mean", y = halflife ), width = .5, size = .5, alpha= 0, color = "black") +
+    #geom_jitter(width = .25, alpha = .5, size = .5, color = "steelblue") +
+    geom_boxplot(aes(x = Category, y = halflife, color = source )) +
+    theme_minimal()
   
 # Simple boxplot and  violin (playing around with aesthetics)
-alldata %>% filter (source == "halflife.y") %>%
+alldata %>% 
     mutate(Category = case_when(
-      IRF3_3UTR > 0  ~ " > 0 3'UTR sites", 
-      IRF3_3UTR == 0 ~ " 0 3'UTR sites"
+      IRF3_3UTR > 0 | IRF3_5UTR > 0 | IRF3_Exon > 0 | IRF3_Intron > 0   ~ "target", 
     )) %>%
-    ggplot(aes(x = Category, y = halflife)) +
+    ggplot(aes(x = Category, y = halflife, color = source)) +
     geom_boxplot(aes(x = "mean", y = halflife ), width = .5, color = "black") +
     #geom_violin(aes(x = "mean", y = halflife ),  color = "black", alpha = 0, width = .4) +
     geom_boxplot(aes(x = Category, y = halflife ), width = .5, alpha = 0 , color= "black") +
@@ -195,16 +193,21 @@ alldata %>% filter (source == "halflife.y") %>%
 #Testing the significance Mann-Whitney wilcoxon of the differences in half-life between bins 
 #Change halflife.x or y depending on parental or KO 
 halflife_nosites_TA <- alldata %>% 
-    filter(source == "halflife.y") %>% 
-    filter(IRF3_3UTR == 0)
+    #filter(source == "halflife.x") %>% 
+    filter(IRF3_3UTR > 0 | IRF3_Intron > 0 |IRF3_Exon >0 | IRF3_Exon > 0)
 
 halflife_onesite_atleast_TA <- alldata %>% 
-    filter(source == "halflife.y") %>% 
+    #ilter(source == "halflife.x") %>% 
     filter(IRF3_3UTR > 0)
   
-halflife_mean_TA <- alldata %>% 
-    filter(source == "halflife.y")
-  
+halflife_nontargets_TA <- alldata %>% 
+  #filter(source == "halflife.x") %>% 
+  filter(IRF3_3UTR == 0 & IRF3_Intron == 0  & IRF3_Exon == 0 & IRF3_5UTR == 0 )
+
+x<- wilcox.test(halflife_nosites_TA$halflife.y, halflife_nosites_TA$halflife.x)
+x
+p.adjust(x$p.value, method = "bonferroni", n = 200)
+
 #ks.test(halflife_nosites_TA$halflife, halflife_onesite_atleast_TA$halflife)
 
 x<-wilcox.test(halflife_nosites_TA$halflife, halflife_onesite_atleast_TA$halflife,
@@ -228,40 +231,45 @@ alldata %>% filter(source == "halflife.x") %>%
 #############################################
 #Binning cumulative number of 3'UTR binding sites for CDF plots
 library(mltools)
+all_halflife<- full_join(result_TA_halflife, result_KO_halflife, by = "SYMBOL")
+alldata<-full_join(PARdata, all_halflife, by = "SYMBOL")
+alldata<-na.omit(alldata)
+glimpse(alldata)
+
 alldata[,"quantiles_Naive"] <- bin_data(alldata$naive_3UTR, bins=c(0, 1, 2, 5, 10, 56), binType = "explicit")
 
 alldata[,"quantiles_IRF3"] <- bin_data(alldata$IRF3_3UTR, bins=c(0, 1, 2, 5, 10, 56), binType = "explicit")
 
 ### Look at the breakdown of the data based on number of 3'utr binding sites. Log2 FC of naive/KO
 alldata %>% 
-  spread(source, halflife) %>%
-  ggplot(aes(x = log2(halflife.x / halflife.y), color = as.factor(quantiles_IRF3))) +
+  #spread(source, halflife) %>% filter(log2(halflife.y/halflife.x) != 0) %>% 
+  ggplot(aes(x = log2(halflife.y / halflife.x), color = as.factor(quantiles_IRF3))) +
   stat_ecdf() +
-  stat_ecdf(aes(x= log2(halflife.x / halflife.y)), color = "black") +
-  xlim(-3, 3) +
+  stat_ecdf(aes(x= log2(halflife.y / halflife.x)), color = "black") +
+  xlim(-2, 2) +
   theme_minimal()
 
 alldata %>%
-  spread(source, halflife) %>%
-  ggplot(aes(x= as.factor(quantiles_IRF3),  y= log2(halflife.x/halflife.y))) +
-  geom_boxplot( width = .5) +
-  ylim(-2, 2) +
+  #spread(source, halflife) %>% filter(log2(halflife.y/halflife.x) != 0) %>% 
+  ggplot(aes(x= as.factor(quantiles_IRF3),  y= log2(halflife.y/halflife.x))) +
+  geom_boxplot() +
+  ylim(-1, 1) +
   theme_minimal() 
 
-# Look at KO data (halflife.y = ELAVL1 KO RNA halflives)
-alldata %>% filter(source == "halflife.y") %>%
-  ggplot(aes(x=as.factor(quantiles_IRF3), y = halflife))+
+# Look at KO data (halflife.y = ELAVL1 KO RNA half-lives) log2(K0/wt)
+alldata %>%# filter(source == "halflife.y") %>%
+  ggplot(aes(x=as.factor(quantiles_IRF3), y = halflife.y))+
   geom_boxplot(width=.5) +
   ylim(4,16)+
   theme_minimal()
 
-alldata %>% spread(source, halflife) %>%
-  ggplot(aes(x= log2(halflife.x/halflife.y), color = as.factor(quantiles_IRF3)))+
+alldata %>%
+  ggplot(aes(x= log2(halflife.y/halflife.x), color = as.factor(quantiles_IRF3)))+
   stat_ecdf() +
   xlim(-1.5,1.5) +
   theme_minimal()
 
-alldata %>% spread(source, halflife) %>%
+alldata  %>%
   ggplot(aes(y= log2(halflife.x/halflife.y), x= as.factor(quantiles_IRF3)))+
   geom_boxplot(width=.5) +
   ylim(-2, 2) +
@@ -283,27 +291,24 @@ spread(source, halflife)
 q4<- alldata %>% filter(quantiles_IRF3 == "[10, 56]") %>%
 spread(source, halflife)
 
-x<-wilcox.test((q0$halflife.x/q0$halflife.y), (q4$halflife.x/q4$halflife.y), paired = FALSE, alternatie= "less")
+x<-wilcox.test(log2(q0$halflife.y/q0$halflife.x), log2(q1$halflife.y/q1$halflife.x), paired = FALSE, alternatie= "less")
 p.adjust(x$p.value, method = "bonferroni", n = 2) 
 
 #############################################################
-#Making CDFs
+#Making CDFs for half-lives grouped by number of 3UTR sites
 library(mltools)
 
 threeutr_only<-alldata %>%filter(IRF3_3UTR > 0 & IRF3_Intron == 0)
 
-alldata[,"quantiles_Naive"] <- bin_data(alldata$naive_3UTR, bins=c(0, 1, 2, 5, 10, 20, 56), binType = "explicit")
+alldata[,"quantiles_Naive"] <- bin_data(alldata$naive_3UTR, bins=c(0, 1, 2, 5, 10, 56), binType = "explicit")
 
-alldata[,"quantiles_IRF3"] <- bin_data(alldata$IRF3_3UTR, bins=c(0, 1, 2, 5, 10, 20, 56), binType = "explicit")
+alldata[,"quantiles_IRF3"] <- bin_data(alldata$IRF3_3UTR, bins=c(0, 1, 2, 5, 10,  56), binType = "explicit")
 
-alldata <- alldata %>%
-  spread(source, halflife)
-
-HighBinders_3UTR_Base <-alldata %>%
-  filter(quantiles_IRF3 == "[20, 56]" ) ; 
+#HighBinders_3UTR_Base <-alldata %>%
+  #filter(quantiles_IRF3 == "[20, 56]" ) ; 
 
 HighMediumBinders_3UTR_Base <-alldata %>%
-  filter(quantiles_IRF3 == "[10, 20)"); 
+  filter(quantiles_IRF3 == "[10, 56]"); 
 
 MediumBinders_3UTR_Base <- alldata %>%
   filter(quantiles_IRF3 =="[5, 10)")
@@ -318,32 +323,37 @@ No_3UTR<- alldata %>%
   filter(quantiles_IRF3 == "[0, 1)")
 
 ###################################
-HighBinders_3UTR_Express<-HighBinders_3UTR_Base$halflife.x
-HighMediumBinders_3UTR_Express<-HighMediumBinders_3UTR_Base$halflife.x
-MidBinders_3UTR_Express<-MediumBinders_3UTR_Base$halflife.x
-MidLowBinders_3UTR_Express<-MediumLowBinders_3UTR_Base$halflife.x
-LowBinders_3UTR_Express<-LowBinders_3UTR_Base$halflife.x
-NoBinders_3UTR_Express<-No_3UTR$halflife.x
-AllTranscripts<-alldata$halflife.x
+#HighBinders_3UTR_Express<-HighBinders_3UTR_Base$halflife.x
+HighMediumBinders_3UTR_Express<-HighMediumBinders_3UTR_Base$halflife.y
+MidBinders_3UTR_Express<-MediumBinders_3UTR_Base$halflife.y
+MidLowBinders_3UTR_Express<-MediumLowBinders_3UTR_Base$halflife.y
+LowBinders_3UTR_Express<-LowBinders_3UTR_Base$halflife.y
+AllTranscripts<-alldata$halflife.y
+NonTargets_halflife<- halflife_nontargets_TA$halflife.y
+
+x<- wilcox.test(NonTargets_halflife,MidLowBinders_3UTR_Express )
+p.adjust(x$p.value, method = "bonferroni", n = 718)
 
 #### TRYING with ggplot for better looking graph
 library("reshape2")
 library("plyr")
 library("ggplot2")
 
-df <- data.frame(x = c(AllTranscripts, HighBinders_3UTR_Express, 
+df <- data.frame(x = c(AllTranscripts,
                        HighMediumBinders_3UTR_Express,MidBinders_3UTR_Express, 
                        MidLowBinders_3UTR_Express, LowBinders_3UTR_Express, 
-                       NoBinders_3UTR_Express),
-                 ggg = factor(rep(1:7, c(4058,13,106,338,746, 652,2203))))
+                       NonTargets_halflife),
+                 ggg = factor(rep(1:6, c(4058,119,337,718,568,1918))))
 
 ggplot(df, aes(x, colour = ggg)) +
   stat_ecdf() +
   xlim(2, 18) +
   theme_minimal() +
-  scale_colour_hue(name="my legend", labels=c('AllTranscripts', 'High > 20', 
-                                              'HighMedium (10-20 )', 'Medium (5-10)',
-                                              'Medium_Low (2-5)', 'Low (1-2)','No Binders'))
+  scale_colour_hue(name="my legend", labels=c('AllTranscripts',
+                                              'HighMedium (10-20 )', 'Medium (5-10)'))
+
+
+
 
 ##############################################################
 alldata %>% 
@@ -355,26 +365,76 @@ alldata %>%
   ylim(2,18) +
   theme_minimal()
 
-ggplot(alldata, aes(x = halflife.x, color = quantiles_IRF3)) +
-  stat_ecdf() +
-  xlim(2,18) +
-  theme_minimal()
+ggplot(alldata, aes(x = quantiles_IRF3, y = log2(halflife.y/ halflife.x), color = quantiles_IRF3)) +
+  geom_boxplot(width = .5) +
+  theme_minimal() +
+  ylim(-2,2)
 
+#histogram of half-lives 
 alldata %>%  
 gather(source, halflife, c(halflife.x, halflife.y)) %>% 
-filter(IRF3_3UTR > 0) %>%
-ggplot(aes(x= halflife)) +
-  geom_density(aes(color = source), size = 1) +
-  geom_density(aes(x= halflife), color = "black", size = 1) +
+  mutate(category= case_when(
+    IRF3_3UTR > 0 ~ "target" 
+  )) %>% 
+  unite(x, c(source,category) )%>% 
+  ggplot(aes(x= halflife)) +
+  geom_density(aes(color = x), size = 1) +
   theme_minimal() 
+
+alldata %>%  
+  gather(source, halflife, c(halflife.x, halflife.y)) %>% 
+  mutate(category= case_when(
+    IRF3_3UTR > 0 | IRF3_Intron > 0 | IRF3_5UTR > 0 | IRF3_Exon > 0 ~ "target" 
+  )) %>% 
+  unite(x, c(source,category) )%>% 
+  ggplot(aes(x= halflife, y= x)) +
+  geom_boxplot(width=.5) +
+  theme_minimal() +
+  coord_flip() +
+  xlim(4,12)
+
+alldata %>%  
+  mutate(category= case_when(
+    IRF3_3UTR > 0 & normalized_Flag_IRF3> 0 ~ "target" 
+  )) %>% 
+  ggplot(aes(x= log2(halflife.y/halflife.x))) +
+  geom_boxplot(aes(color = category), size = 1) + 
+  theme_minimal() +
+  coord_flip() +
+  xlim(-1,1)
 
 ###############################################3
 #Making fitted timecourse visualizations 
+result_TA$halflife[result_TA$halflife > 24 ] <- 24 
+result_KO$halflife[result_KO$halflife > 24 ] <- 24 
+
+result_TA<-result_TA  %>% 
+  select(SYMBOL, timepoints, .fitted) %>%
+  unique() %>%
+  na.omit()
+
+result_KO<- result_KO  %>% 
+  select(SYMBOL, timepoints, .fitted) %>%
+  unique() %>%
+  na.omit()
+
 fitted_results<-full_join(result_TA, result_KO, by= c("SYMBOL", "timepoints"))
 fitted_results<- na.omit(fitted_results)
 
 fitted_results %>% 
   ggplot(aes(x= timepoints, y = .fitted.y, group= SYMBOL)) +
+  geom_line(alpha = .05, color = "maroon") +
+  geom_point(aes(x= timepoints, y = mean(.fitted.y), group= timepoints)) +
+  theme_minimal()
+
+fitted_results %>% 
+  ggplot(aes(x= timepoints, y = .fitted.y, group= SYMBOL)) +
+  geom_line(alpha = .05, color = "maroon") +
+  geom_point(aes(x= timepoints, y = mean(.fitted.y), group= timepoints)) +
+  theme_minimal()
+
+fitted_results %>% 
+  ggplot(aes(x= timepoints, y = .fitted.y, group= timepoints)) +
   geom_line(alpha = .05, color = "maroon") +
   theme_minimal()
 
@@ -394,16 +454,23 @@ function_targets<- alldata %>%
   filter(normalized_Flag_IRF3 > 0) %>%
   filter(FC > 1.5)
 
-
 #write.csv(non_functional,"non_functional")
 test<-fitted_results %>% 
   mutate(FC_halflife= halflife.x/halflife.y)
-  
-ggplot(test, aes(x= timepoints, y= timepoint_mean.x)) +
-  geom_line() +
-  geom_line(aes(x= timepoints, y = timepoint_mean.y), color = "red") +
-  theme_minimal() +
-  ylim(0,1)
+
+mean_fitted_results<- fitted_results %>% 
+  group_by(timepoints) %>% 
+  mutate(fitted_mean.x= mean(.fitted.x))
+
+mean_fitted_results<- fitted_results %>% 
+  group_by(timepoints) %>% 
+  mutate(fitted_mean.y= mean(.fitted.y))
+
+mean_fitted_results %>% 
+  ggplot() +
+  geom_line(aes(x= timepoints, y = .fitted.x, group= SYMBOL), alpha = .05, color = "grey") +
+  geom_line(aes(x= timepoints, y = fitted_mean.x), color = "black", size=1) +
+  theme_minimal()
 
 ####################
 #plotting CDF plot with stability and transcript feature
@@ -422,7 +489,7 @@ dim(CodingSpecific)
 Intron_and_ThreeUTR<- alldata %>% 
   filter(alldata$IRF3_Intron !=0 & alldata$IRF3_3UTR !=0 & alldata$IRF3_5UTR==0 & alldata$IRF3_Exon==0 ); dim(Intron_and_ThreeUTR)
 
-NonTargets<-filter(alldata, alldata$IRF3_3UTR ==0 & alldata$IRF3_Intron ==0 & alldata$IRF3_5UTR==0 & alldata$IRF3_Exon==0); 
+NonTargets<-filter(alldata, alldata$IRF3_3UTR == 0 & alldata$IRF3_Intron == 0 & alldata$IRF3_5UTR== 0 & alldata$IRF3_Exon== 0); 
 dim(NonTargets)
 
 AllmRNAdata<-filter(alldata, alldata$IRF3_5UTR !=0 | alldata$IRF3_Intron !=0 |alldata$IRF3_Exon !=0 | alldata$IRF3_3UTR !=0); 
@@ -431,7 +498,7 @@ dim(AllmRNAdata)
 Multi_Targets<-filter(alldata, alldata$IRF3_3UTR == !0 & alldata$IRF3_Intron == !0 & alldata$IRF3_5UTR== !0 | alldata$IRF3_Exon==!0); 
 dim(Multi_Targets)
 
-Intron_Only_Express<-(IntronSpecific$halflife.x)
+Intron_Only_Express<-(IntronSpecific$halflife.y)/(IntronSpecific$halflife.x)
 ThreeUTR_Only_Express<-(ThreeUTRSpecific$halflife.x) 
 FiveUTR_Only_Express<-(FiveUTRSpecific$halflife.x) 
 Coding_Only_Express<-(CodingSpecific$halflife.x) 
@@ -450,14 +517,16 @@ df <- data.frame(x = c(All_RNAtargets_Express_0H, NonTargets_Express,
                        ThreeIntron_Express, Multi_Targets_Express) 
                  ,ggg = factor(rep(1:8, c(4058,1918,9,18,703, 330,747, 240))))
 
-ggplot(df, aes(x=as.factor(ggg), y=x, fill=ggg)) +
+ggplot(df, aes(x=as.factor(ggg), y=log2(x), fill=ggg)) +
   geom_boxplot(width= .5) +
-  theme_minimal() 
+  theme_minimal() +
+  ylim(-1,1)
 
-ggplot(df, aes(x, colour = ggg)) +
-  stat_ecdf()+
-  theme_minimal()+
-  xlim(2,18) +
+ggplot(df, aes( log2(x), colour = ggg)) +
+  stat_ecdf()+ 
+  xlim(-1,1) +
+  theme_minimal()
+
   scale_colour_hue(name="my legend", labels=c('AllTranscripts','No_binders','5UTR', 
                                               'coding','3UTR', 'intron', '3UTR_intron','multi'))
 
@@ -471,7 +540,7 @@ ggplot(df, aes(x, colour = ggg, width=.5)) +
 #########################
 #Stability based on number of introns and NO 3'UTR contribution 
 library(mltools)
-intron_only <- alldata %>% filter(IRF3_3UTR == 0 & IRF3_5UTR == 0 & IRF3_Exon == 0)
+intron_only <- alldata %>% filter(IRF3_3UTR == 0)
 quantile(intron_only$IRF3_Intron)
 
 intron_only[,"quantiles_Intron"] <- bin_data(intron_only$IRF3_Intron, bins=c(0, 1, 2, 5,65), binType = "explicit")
@@ -580,7 +649,7 @@ IRF3_total<-RIP_par_data %>%
 summary(as.data.frame(naive_total$naive_total))
 
 ##### 
-#plotting enrichment based ofd of a cumulative number of "total" binding sites 
+#plotting enrichment based of of a cumulative number of "total" binding sites 
 naive_total<- RIP_par_data %>% 
   mutate(total_number = rowSums(RIP_par_data[6:9]))
 
@@ -647,4 +716,55 @@ ggplot(All_Intron, aes(x= normalized_Flag_IRF3, color = as.factor(source), na.rm
   stat_ecdf() +
   theme_minimal() + 
   facet_wrap(~quantiles)
+
+ggplot(alldata, aes(y= (IRF3_mean_counts-naive_mean_counts), 
+                    x = rank(normalized_Flag_IRF3)-rank(normalized_Flag_naive), color = IRF3_3UTR > 0)) + 
+  geom_point(alpha = .5) +
+  theme_minimal() +
+  geom_hline(yintercept = 1) +
+  geom_hline(yintercept = -1)
+
+######################
+
+alldata %>% mutate(Category = case_when(IRF3_3UTR > 0 | IRF3_Intron > 0 |IRF3_Exon >0 | IRF3_Exon > 0))
+
+Intron_Only_Express<-(IntronSpecific$halflife.y)/(IntronSpecific$halflife.x)
+ThreeUTR_Only_Express<-(ThreeUTRSpecific$halflife.y) /(ThreeUTRSpecific$halflife.x) 
+FiveUTR_Only_Express<-(FiveUTRSpecific$halflife.y) /(FiveUTRSpecific$halflife.x) 
+Coding_Only_Express<-(CodingSpecific$halflife.y) /(CodingSpecific$halflife.x) 
+ThreeIntron_Express<-(Intron_and_ThreeUTR$halflife.y) /(Intron_and_ThreeUTR$halflife.x) 
+All_RNAtargets_Express_0H<-(alldata$halflife.y) /(alldata$halflife.x) 
+NonTargets_Express<-(NonTargets$halflife.y)/(NonTargets$halflife.x)
+Multi_Targets_Express<-(Multi_Targets$halflife.y/Multi_Targets$halflife.x)
+AllmRNAtargets_Express<-(AllmRNAdata$halflife.y)/(AllmRNAdata$halflife.x)
+
+x<-wilcox.test(NonTargets_Express,Multi_Targets_Express)
+p.adjust(x$p.value, method= "bonferroni", n=200)
+
+df <- data.frame(x = c(All_RNAtargets_Express_0H, NonTargets_Express,
+                       FiveUTR_Only_Express,Coding_Only_Express, 
+                       ThreeUTR_Only_Express,Intron_Only_Express, 
+                       ThreeIntron_Express, Multi_Targets_Express) 
+                 ,ggg = factor(rep(1:8, c(4058,1918,9,18,703, 330,747, 240))))
+
+ggplot(df, aes(x=as.factor(ggg), y=x, color=ggg)) +
+  stat_ecdf() +
+  theme_minimal() 
+
+test<-alldata %>% mutate(Category= case_when(
+IRF3_Intron > 0 & IRF3_3UTR == 0 & IRF3_Exon == 0 & IRF3_5UTR == 0 ~ "Intron_Specific",
+IRF3_3UTR > 0 & IRF3_Intron == 0 & IRF3_Exon == 0 & IRF3_5UTR == 0 ~ "UTR3_specific",
+IRF3_3UTR > 0 & IRF3_Intron > 0 & IRF3_Exon == 0 & IRF3_5UTR == 0 ~ "Intron_3UTR", 
+IRF3_3UTR == 0 & IRF3_Intron == 0 & IRF3_Exon > 0 & IRF3_5UTR == 0 ~ "Coding", 
+IRF3_3UTR == 0 & IRF3_Intron == 0 & IRF3_Exon == 0 & IRF3_5UTR > 0 ~ "5UTR", 
+IRF3_3UTR == 0 & IRF3_Intron == 0 & IRF3_Exon == 0 & IRF3_5UTR == 0 ~ "Nontargets", 
+IRF3_3UTR > 0  & IRF3_Intron > 0 & IRF3_Exon > 0 | IRF3_5UTR > 0 ~ "Multi"
+)) %>% filter((halflife.y/halflife.x) != 1) %>% 
+  ggplot(aes(x=log2(halflife.y/halflife.x), color = Category)) +
+  stat_ecdf() + 
+  stat_ecdf(aes(x= log2(halflife.y/halflife.x)), color= "black") +
+  theme_minimal() +
+  xlim(-2,2)
+
+
 

@@ -112,8 +112,8 @@ shared_x<- all_naive$gene_short_name %in% all_IRF3$gene_short_name
 shared_spec<-all_naive[shared_x,]
 
 # GO visualizations of PAR-CLIP and RIP specific data 
-naive_mRNA<- naive_spec$gene_short_name
-naive_mRNA_df <- bitr(naive_spec$gene_short_name, fromType = "SYMBOL",
+naive_mRNA<- spec_naive_enrich$gene_short_name
+naive_mRNA_df <- bitr(naive_mRNA, fromType = "SYMBOL",
                       toType = c("ENTREZID", "ENSEMBL"),
                       OrgDb = org.Hs.eg.db)
 
@@ -127,9 +127,16 @@ naive_mRNA_BP <- enrichGO(gene     = naive_mRNA_df$ENTREZID,
                           qvalueCutoff  = 0.05,
                           readable = TRUE)
 
-barplot(naive_RA) + theme_minimal()
+barplot(naive_RA) + theme_minimal() +
+  coord_flip() + 
+  theme(axis.text.x = element_text(size=12), 
+        axis.text.y = element_text(),
+        panel.grid.major = element_blank(),
+        strip.text.y = element_text(size=12)) +
+  labs(y= "Number of transcripts", title = "GO analysis naive specific")
 
-IRF3_mRNA <- IRF3_spec$gene_short_name
+
+IRF3_mRNA <- spec_IRF3_enrich$gene_short_name
 IRF3_mRNA_df <- bitr(IRF3_mRNA, fromType = "SYMBOL",
                 toType = c("ENTREZID", "ENSEMBL"),
                 OrgDb = org.Hs.eg.db)
@@ -144,6 +151,9 @@ IRF3_BP <- enrichGO(gene     = IRF3_mRNA_df$ENTREZID,
 
 IRF3_RA<-enrichPathway(IRF3_mRNA_df$ENTREZID, organism = "human", readable = TRUE, pvalueCutoff  = 0.1)
 
+naive_RA_df<- as.data.frame(naive_RA)
+write_csv(naive_RA_df, "SupFigure2_naive_specific_ReactomeAnalysis")
+
 barplot(IRF3_RA) + theme_minimal() +
   coord_flip() + 
   theme(axis.text.x = element_text(size=12), 
@@ -153,8 +163,7 @@ barplot(IRF3_RA) + theme_minimal() +
   labs(y= "Number of transcripts", title = "GO analysis IRF3 specific")
 
 
-
-shared_mRNA <- shared_spec$gene_short_name
+shared_mRNA <- shared_enriched$gene_short_name
 shared_mRNA_df <- bitr(shared_mRNA, fromType = "SYMBOL",
                      toType = c("ENTREZID", "ENSEMBL"),
                      OrgDb = org.Hs.eg.db)
@@ -176,11 +185,13 @@ barplot(shared_RA) + theme_minimal() +
         strip.text.y = element_text(size=12)) +
   labs(y= "Number of transcripts", title = "GO analysis IRF3 specific")
 
+shared_RA_df<- as.data.frame(shared_RA)
+#write_csv(shared_RA_df, "SupFigure2_shared_enriched_ReactomeAnalysis")
 #############################################################################
 functional_targets<- read_csv("functional_targets")
-func_mRNA <- functional_targets$gene
+func_mRNA <- spec_IRF3_enrich_static$gene_short_name
 
-func_mRNA_df <- bitr(func_mRNA, fromType = "SYMBOL",
+func_mRNA_df <- bitr(functional_targets$gene, fromType = "SYMBOL",
                        toType = c("ENTREZID", "ENSEMBL"),
                        OrgDb = org.Hs.eg.db)
 
@@ -194,7 +205,7 @@ func_mRNA_BP <- enrichGO(gene     = func_mRNA_df$ENTREZID,
 
 shared_RA<-enrichPathway(func_mRNA_df$ENTREZID, organism = "human", readable = TRUE)
 
-barplot(func_mRNA_BP) + theme_minimal() +
+barplot(shared_RA) + theme_minimal() +
   coord_flip() + 
   theme(axis.text.x = element_text(size=12), 
         axis.text.y = element_text(),
@@ -269,26 +280,35 @@ dev.off()
 
 #write_csv(IRFdata, "RIP_PAR_overlap_IRF3.csv")
 #write_csv(naivedata, "RIP_PAR_overlap_naive.csv")
+library(tidyverse)
 
 IRF3_data<- read_csv("RIP_PAR_overlap_IRF3.csv")
 naive_data<-read_csv("RIP_PAR_overlap_naive.csv")
 
+potential_functional<- read_csv("functional_targets")
+glimpse(potential_functional)
 
-IRF3_RIP_df <- bitr(IRF3_data$gene_short_name, fromType = "SYMBOL",
+IRF3_RIP_df <- bitr(potential_functional$gene, fromType = "SYMBOL",
                     toType = c("ENTREZID", "ENSEMBL"),
                     OrgDb = org.Hs.eg.db)
 
 
 IRF3_RIP_df_BP <- enrichKEGG(gene     = IRF3_RIP_df$ENTREZID,
-                           #OrgDb         = org.Hs.eg.db,
-                           #ont           = "BP",
+                           rgDb         = org.Hs.eg.db,
+                           ont           = "BP",
                            pAdjustMethod = "BH",
-                           pvalueCutoff  = 0.01,
-                           qvalueCutoff  = 0.05)
-                           #readable = TRUE)
+                           pvalueCutoff  = 0.1,
+                           qvalueCutoff  = 0.5)
+                           readable = TRUE, )
 
+glimpse(IRF3_RIP_df_BP)
+?enrichKEGG
 IRF3_RIP_df_RA<-enrichPathway(IRF3_RIP_df$ENTREZID, organism = "human", 
-                              pAdjustMethod = "BH", readable = TRUE)
+                              pAdjustMethod = "BH", readable = TRUE,pvalueCutoff = .5, qvalueCutoff  = 0.5)
+
+glimpse(IRF3_RIP_df_BP)
+
+write.csv(IRF3_RIP_df_BP,"halflife_KEGG_functional_targets")
 
 emapplot(IRF3_RIP_df_BP, showCategory = 10, layout = "kk")
 cnetplot(IRF3_RIP_df_RA,colorEdge=TRUE, showCategory = 10, node_label="category", layout= "kk")
