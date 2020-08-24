@@ -249,7 +249,6 @@ IRF3_urt3_bound<- annotated_utr3 %>%
 IRF3_3UTR_speicificTranscripts<-IRF3_urt3_bound%>%
   filter(as.vector(IRF3_urt3_bound$gene_short_name.x) %notin% as.vector(naive_urt3_bound$gene_short_name.x))
 
-
 ###########################################
 #playing around with annotating the peak overlaps
 
