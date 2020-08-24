@@ -1,4 +1,4 @@
-### We are testing push/pull 
+
 library(tidyverse)
 library(dplyr)
 library(reshape2)
@@ -17,13 +17,13 @@ IRF3_data<-data %>%
   dplyr::select(gene_short_name,IRF3_mean_counts, normalized_Flag_IRF3, IRF3_5UTR, IRF3_Intron, IRF3_Exon, IRF3_3UTR)
 
 #### Run one dataset at a time
-naive_data_3UTR<-naive_data; summary(naive_data_3UTR)
+naive_data_3UTR<-naive_data %>% filter(naive_Intron == 0 &  naive_5UTR == 0 & naive_Exon == 0)
 
 naive_data_3UTR[,"quantiles"] <- bin_data(naive_data_3UTR$naive_3UTR, bins=c(0, 1, 2, 5, 10, 20, 56), binType = "explicit")
 
-plot(naive_data_3UTR$quantiles)
+#plot(naive_data_3UTR$quantiles)
 
-#IRF3_data[,"quantiles"] <- bin_data(IRF3_data$IRF3_3UTR, bins=c(0, 1, 2, 5, 10, 20, 56), binType = "explicit")
+IRF3_data[,"quantiles"] <- bin_data(IRF3_data$IRF3_3UTR, bins=c(0, 1, 2, 5, 10, 20, 56), binType = "explicit")
 
 ### Look at the breakdown of the data based on number of 3'utr binding sites
 HighBinders_3UTR_Base <-naive_data_3UTR %>%
@@ -50,10 +50,10 @@ HighMediumBinders_3UTR_Express<-HighMediumBinders_3UTR_Base$normalized_Flag_naiv
 MidBinders_3UTR_Express<-MediumBinders_3UTR_Base$normalized_Flag_naive
 MidLowBinders_3UTR_Express<-MediumLowBinders_3UTR_Base$normalized_Flag_naive
 LowBinders_3UTR_Express<-LowBinders_3UTR_Base$normalized_Flag_naive
-NoBinders_3UTR_Express<-No_3UTR$normalized_Flag_naive
-AllTranscripts<-naive_data_3UTR$normalized_Flag_naive
+NoBinders_3UTR_Express_naive<-No_3UTR$normalized_Flag_naive
+AllTranscripts_naive<-naive_data_3UTR$normalized_Flag_naive
 
-# Wilcox test (or KS test) significane between two groups 
+# Wilcox test (or KS test) significance between two groups 
 x<-wilcox.test(NonTargets_Express,Multi_Targets_Express)
 p.adjust(x$p.value, method= "bonferroni", n=2)
 x$p.value
@@ -63,23 +63,29 @@ library("reshape2")
 library("plyr")
 library("ggplot2")
 
-df <- data.frame(x = c(AllTranscripts,NoBinders_3UTR_Express, LowBinders_3UTR_Express,
+df <- data.frame(x = c(AllTranscripts_naive,NoBinders_3UTR_Express_naive, LowBinders_3UTR_Express,
                        MidLowBinders_3UTR_Express, MidBinders_3UTR_Express,
                        HighMediumBinders_3UTR_Express,
-                       HighBinders_3UTR_Express ),ggg = factor(rep(1:7, c(13582,8662,1425,1853,1131,435, 76))))
+                       HighBinders_3UTR_Express ),
+                 ggg = factor(rep(1:7, c(8441,7242,556,463,150,28, 2))))
 
 # CDF plot 
 ggplot(df, aes(x, colour = ggg)) +
-  coord_cartesian(xlim = c(-4, 4))+
+  coord_cartesian(xlim = c(-2, 2))+
   stat_ecdf()+
   theme_minimal() +
   scale_colour_hue(name="my legend", labels=c('AllTranscripts', 'No Binders', 
                                               'Low (1-2)','Medium_Low (2-5)', 'Medium (5-10)', 
                                               'HighMedium (10-20 )',  'High > 20'))
-
+#Boxplot 
 ggplot(df, aes(x=as.factor(ggg), y=x, fill=ggg)) +
   geom_boxplot(width= .5) +
   ylim(-5,5) +
+  theme_minimal()
+
+#historgram 
+ggplot(naive_data_3UTR, aes(x= normalized_Flag_naive, fill= quantiles)) + 
+  geom_histogram() + 
   theme_minimal()
 
 #################### Filtering data based on specific transcript feature 
@@ -99,8 +105,6 @@ NonTargets<-filter(naive_data, naive_data$naive_3UTR ==0 & naive_data$naive_Intr
 Multi_Targets<- naive_data %>% filter(naive_3UTR > 0 & naive_Intron > 0, naive_data$naive_mean_counts > 8 )
 Multi_Targets<- Multi_Targets %>% filter(naive_5UTR > 0 | naive_Exon > 0)
 
-summary(Multi_Targets)
-
 AllmRNAdata<-filter(naive_data, naive_data$naive_5UTR !=0 | naive_data$naive_Intron !=0 |naive_data$naive_Exon !=0 | naive_data$naive_3UTR !=0); dim(AllmRNAdata)
 
 Intron_Only_Express<-(IntronSpecific_naive$normalized_Flag_naive) 
@@ -113,6 +117,7 @@ NonTargets_Express<-(NonTargets$normalized_Flag_naive)
 Multi_Targets_Express<- Multi_Targets$normalized_Flag_naive
 AllmRNAtargets_Express<-(AllmRNAdata$normalized_Flag_naive)
 
+#Wilcox test of difference in enrichment between groups of transcripts 
 x<-wilcox.test(NonTargets_Express,ThreeIntron_Express, alternative= "less")
 p.adjust(x$p.value, method= "bonferroni", n=2)
 
@@ -152,7 +157,7 @@ naive_data_intron[, "Intron_quantiles"] <- bin_data(naive_data_intron$naive_Intr
 
 IRF3_data_intron[, "Intron_quantiles"] <- bin_data(IRF3_data_intron$IRF3_Intron, bins=c( 0, 1, 5, 10, 50, 100, 406), binType = "explicit")
 
-### Look at the breakdown of the data based on number of 3'utr binding sites
+### Look at the breakdown of the data based on number of Intronic binding sites
 plot(IRF3_data_intron$Intron_quantiles)
 glimpse(IRF3_data_intron)
 
@@ -231,8 +236,8 @@ ggplot(naive_data_3UTR, aes(x = as.factor(quantiles), y = normalized_Flag_naive)
   labs(x= "Number of 3' UTR binding sites") +
   labs(y= "RIP-seq enrichment")
 
-ggplot(IRF3_data, aes(x = as.factor(quantiles), y = normalized_Flag_IRF3)) +
-  geom_boxplot(alpha = 0.7, fill = "maroon", width = 0.5) +
+ggplot(IRF3_data, aes(x = normalized_Flag_IRF3, color = quantiles)) +
+  stat_ecdf() +
   theme_minimal() +
   labs(x= "Number of 3' UTR binding sites") +
   labs(y= "RIP-seq enrichment")
@@ -247,8 +252,7 @@ ggplot(naive_data_intron, aes(x = as.factor(Intron_quantiles), y = normalized_Fl
   theme_minimal() +
   labs(x= "Number of Intronic binding sites") +
   labs(y= "RIP-seq enrichment")
-
- ###comparison between naive and IRF3
+###comparison between naive and IRF3
 ggplot(IRF3_data_intron, aes(x = as.factor(Intron_quantiles), y = normalized_Flag_IRF3)) +
   geom_boxplot(alpha = 0.7, fill = "maroon", width= .5) +
   theme_minimal() +
@@ -266,7 +270,6 @@ ggplot(data, aes(x= (IRF3_Intron/IRF3_3UTR), y = (naive_Intron/naive_3UTR))) +
   geom_point(color = "steelblue", alpha = .2) +
   theme_minimal() +
   geom_abline(slope = 1, intercept = 0)
-
 
 glimpse(data %>% 
   mutate(naive_fraction = (naive_Intron/naive_3UTR), IRF3_fraction = (IRF3_Intron/IRF3_3UTR)) %>%
@@ -287,8 +290,6 @@ glimpse(shared %>% gather(source, fraction, c(naive_Intron, naive_3UTR, IRF3_Int
   ggplot(aes(y = log(fraction), x = as.factor(source))) +
   geom_boxplot()
 
-mean(shared$naive_Intron/shared$naive_3UTR)
-mean(shared$IRF3_Intron/shared$IRF3_3UTR)
 
 #plotting enrichment based of of a cumulative number of "total" binding sites
 naive_total<- all_counts_RIP_par %>% 
@@ -313,7 +314,8 @@ ggplot(IRF3_total, aes(x= IRF3_total, y = normalized_Flag_IRF3)) +
   theme_minimal()
 
 ggplot(naive_total, aes(color= naive_total, x = normalized_Flag_naive)) +
-  stat_ecdf() +
+  stat_ecdf() + 
+  stat_ecdf(aes(color= naive_total), color = "black") +
   theme_minimal() +
   xlim(-2, 2)
 
