@@ -75,6 +75,7 @@ resLFC_df<-data.frame(rownames(resLFC), resLFC)
 resLFC_df<-arrange(resLFC_df, desc(resLFC_df$log2FoldChange))
 head(resLFC_df, n = 20)
 length(which(resLFC_df$log2FoldChang < -2 & resLFC_df$padj <=.005))
+
 # Build similar dataframe but take the absolute value of log fold change
 lfcShrink_df_absvalue <- data.frame(rownames(resLFC), abs(resLFC$log2FoldChange), resLFC$padj)
 colnames(lfcShrink_df_absvalue) <- c("GeneID", "log2FoldChange", "padj")
@@ -203,9 +204,3 @@ points (fold[filter_combined & fold > 0],
 
 
 ##################################
-
-foldchangedat<-cbind(fold, log2_count_matrix$gene_id, pvalue)
-foldchangedat<-as.data.frame(foldchangedat)
-
-
-foldchangedat       
