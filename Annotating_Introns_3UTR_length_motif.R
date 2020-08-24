@@ -63,6 +63,7 @@ full_Anno_Introns<- full_Anno_Introns %>% dplyr::select(intron.start, intron.end
 
 glimpse(full_Anno_Introns)
 
+#adding intron and 3UTR length to respective tables
 intron_totals <- full_Anno_Introns %>%
   group_by(short_ensembl_id) %>%
   mutate(intron_full = sum(intron.width, na.rm= TRUE))
@@ -80,8 +81,7 @@ PARCLIP_3UTR_annot <- PARCLIP_3UTR_annot %>%
   dplyr::select(-X1, -X1_1)
 
 PAR_3UTR_Intron_annt<-left_join(PARCLIP_3UTR_annot, intron_totals, by="short_ensembl_id")
-PAR_3UTR_Intron_annt<- PAR_3UTR_Intron_annt[!duplicated(PAR_3UTR_Intron_annt[c('short_ensembl_id')]),]
-
+PAR_3UTR_Intron_annt<- PAR_3UTR_Intron_annt[!duplicated(PAR_3UTR_Intron_annt[c('short_ensembl_id', 'exon_id')]),]
 glimpse(PAR_3UTR_Intron_annt)
 
 # TRYING TO add actual full 3'UTR sequence to each gene
@@ -95,13 +95,14 @@ annotated_utr3<- full_join(utr3_bioMART_seq , PAR_3UTR_Intron_annt, by = "short_
 glimpse(annotated_utr3)
 
 annotated_utr3<- annotated_utr3 %>% 
-  dplyr::select(-X1,-exon_name, -exon_rank, -annotation)
+  dplyr::select(-X1,-exon_name, -exon_rank, -annotation) %>%
+  na.omit()
 
 #write.csv(annotated_utr3, "annotated_utr3")
 
-#getting rid of all 3UTR that dont' have a sequence
+#getting rid of all 3UTR that don't have a sequence
 annotated_utr3<-annotated_utr3 %>% filter(`3utr` != "Sequence unavailable")
-annotated_utr3<- annotated_utr3[!duplicated(annotated_utr3[c('short_ensembl_id')]),]
+annotated_utr3<- annotated_utr3[!duplicated(annotated_utr3[c('short_ensembl_id', 'exon_id')]),]
 annotated_utr3<-left_join(annotated_utr3, genes, by="short_ensembl_id")
 annotated_utr3<-annotated_utr3[!is.na(annotated_utr3$gene_short_name.x),]
 glimpse(annotated_utr3)
@@ -109,8 +110,6 @@ glimpse(annotated_utr3)
 #finding the length of each 3'UTR
 annotated_utr3<-annotated_utr3 %>%
   mutate(length_3UTR = width(annotated_utr3$`3utr`))
-
-
 
 #Use Biostrings to count the AU frequency of the 3'UTR sequences
 library(Biostrings)
@@ -180,12 +179,11 @@ annotated_utr3 %>%
        x="Total intron space", 
        title="Intron length of the targets of ELAVL1")
 
-
 #plot the ratio utr3 length to intron length
 annotated_utr3 <- annotated_utr3 %>%
   mutate(utr3tointron = length_3UTR/intron_full)
 
-#plotting 3UtR/intron ratio based on expression foldchange
+#plotting 3UTR/intron ratio based on expression fold-change
 annotated_utr3 %>%
   mutate(Category = case_when(
     naive_mean_counts & IRF3_mean_counts > 5  ~ "expressed in both ",
@@ -201,8 +199,7 @@ annotated_utr3 %>%
        x="3UTR/Intron length ratio", 
        title="Ratio of 3UTR/Intron length of the targets of ELAVL1")
 
-
-#plotting 3UtR/intron ratio based on condition value
+#plotting 3UTR/intron ratio based on condition value
 annotated_utr3 %>%
   mutate(Category = case_when(
     IRF3_3UTR > 1 & naive_3UTR > 1 ~ "bound in 3UTR in both", 
@@ -255,7 +252,6 @@ IRF3_3UTR_speicificTranscripts<-IRF3_urt3_bound%>%
 
 ###########################################
 #playing around with annotating the peak overlaps
-
 
 ###################
 annotated_utr3 %>%
