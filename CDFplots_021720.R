@@ -118,7 +118,7 @@ Multi_Targets_Express<- Multi_Targets$normalized_Flag_naive
 AllmRNAtargets_Express<-(AllmRNAdata$normalized_Flag_naive)
 
 #Wilcox test of difference in enrichment between groups of transcripts 
-x<-wilcox.test(NonTargets_Express,ThreeIntron_Express, alternative= "less")
+x<-wilcox.test(NonTargets_Express,ThreeIntron_Express)
 p.adjust(x$p.value, method= "bonferroni", n=2)
 
 df <- data.frame(x = c(All_RNAtargets_Express_0H,NonTargets_Express,FiveUTR_Only_Express,

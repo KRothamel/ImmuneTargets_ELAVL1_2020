@@ -63,15 +63,16 @@ alldata2  %>% filter(log2(halflife.y/halflife.x) != 0) %>%
   stat_ecdf()+
   theme_minimal()
 
-ISG_bound<-alldata3 %>% filter(z == "TRUE_ > 0 3'UTR sites_enriched" )
+ISG_bound<-alldata3 %>% dplyr::filter(z == "TRUE_> 0 3'UTR sites_enriched" )
 ISG_nonbound<-alldata3 %>% filter(z == "TRUE_non-targets") 
-nonISG_bound <- alldata3 %>% filter(z == "FALSE_ > 0 3'UTR sites_enriched")
+nonISG_bound <- alldata3 %>% filter(z == "FALSE_> 0 3'UTR sites_enriched")
 
-#write_csv(ISG_bound, "ISG_bound")
+ISG_bound_topenrich<- ISG_bound %>% filter(halflife.x - halflife.y > 1.5)
+
+write_csv(ISG_bound_topenrich, "ISG_bound_topenrich")
 
 #############################
 
-############################################
 
 
 
