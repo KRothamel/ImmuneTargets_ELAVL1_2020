@@ -58,7 +58,7 @@ NonTargets_Express<-(NonTargets$normalized_Flag_IRF3)
 Multi_Targets_Express<- Multi_Targets$normalized_Flag_IRF3
 AllmRNAtargets_Express<-(AllmRNAdata$normalized_Flag_IRF3)
 
-x<-wilcox.test(NonTargets_Express,ThreeIntron_Express)
+x<-wilcox.test(NonTargets_Express,ThreeUTR_Only_Express, alternative = "less")
 p.adjust(x$p.value, method= "bonferroni", n = 1992)
 
 df <- data.frame(x = c(All_RNAtargets_Express_0H, NonTargets_Express,FiveUTR_Only_Express,Coding_Only_Express, ThreeUTR_Only_Express,Intron_Only_Express, ThreeIntron_Express, Multi_Targets_Express) 
